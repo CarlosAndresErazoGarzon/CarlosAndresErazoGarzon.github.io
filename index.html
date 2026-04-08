@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APM32 Educational Web Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dapjs/dist/dap.umd.js"></script>
+    <style>
+        #editor { width: 100%; height: calc(100vh - 300px); border: 1px solid #333; }
+        .log-box { height: 180px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-family: monospace; padding: 10px; border-bottom: 2px solid #555; }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen overflow-hidden pb-4">
+    <!-- Navbar -->
+    <nav class="bg-blue-800 p-4 text-white flex justify-between items-center shadow-lg">
+        <div class="flex items-center space-x-4">
+            <div class="font-bold text-xl">APM32 Web IDE</div>
+            <select id="exampleSelector" class="bg-blue-700 text-white border-none rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                <option value="">-- Load Example --</option>
+                <option value="blink">Blink LED (PB2)</option>
+                <option value="timer">Timer Toggle</option>
+                <option value="registers">Direct Reg Access</option>
+            </select>
+        </div>
+        <div class="flex space-x-4">
+            <button id="downloadBtn" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded shadow font-semibold hidden">Download .bin</button>
+            <button id="connectBtn" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded shadow font-semibold">1. Connect USB</button>
+            <button id="disconnectBtn" class="bg-red-600 hover:bg-red-500 px-4 py-2 rounded shadow font-semibold hidden">Disconnect</button>
+            <button id="flashBtn" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded shadow font-semibold opacity-50 cursor-not-allowed" disabled>2. Compile & Flash</button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="flex-grow flex flex-col p-4 w-full h-full max-w-7xl mx-auto space-y-4">
+        <!-- Editor -->
+        <div class="flex-grow shadow-lg relative">
+            <div id="editor"></div>
+        </div>
+
+        <!-- Terminal / Logs -->
+        <div class="log-box rounded shadow-md border-t-4 border-gray-600" id="logBox">
+            <div class="text-blue-400">>> Ready. Write your C code. Compilation runs securely in the cloud.</div>
+        </div>
+    </div>
+
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.30.1/min/vs/loader.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
