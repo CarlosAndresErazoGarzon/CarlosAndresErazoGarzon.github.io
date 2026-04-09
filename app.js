@@ -46,6 +46,7 @@ const disconnectBtn = document.getElementById('disconnectBtn');
 const flashBtn = document.getElementById('flashBtn');
 const exampleSelector = document.getElementById('exampleSelector');
 const downloadBtn = document.getElementById('downloadBtn');
+const downloadCBtn = document.getElementById('downloadCBtn');
 
 let lastCompiledBinary = null;
 
@@ -111,6 +112,18 @@ downloadBtn.onclick = () => {
     a.download = 'firmware.bin';
     a.click();
     URL.revokeObjectURL(url);
+};
+
+downloadCBtn.onclick = () => {
+    const code = editor.getValue();
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'main.c';
+    a.click();
+    URL.revokeObjectURL(url);
+    logmsg("Downloaded main.c successfully.", "success");
 };
 
 function logmsg(msg, type='info') {
