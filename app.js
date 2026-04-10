@@ -6,6 +6,7 @@ let virtualFS = {
     'main.c': `#include "apm32f10x.h"\n#include "delay.h"\n\nint main(void) {\n    // Configura relojes base automáticamente\n    APM32_Init();\n    \n    // Activar reloj GPIOB\n    RCM->APB2CLKEN |= (1 << 3);\n    \n    // Configurar PB2 como salida Push-Pull (0x3)\n    // El puerto B (pines 0 a 7) está controlado por CFGLOW.\n    // El pin 2 está desplazado ((pin) * 4) -> 8.\n    GPIOB->CFGLOW &= ~(0x0F << 8); // Reset\n    GPIOB->CFGLOW |=  (0x03 << 8); // Set a Out_PP 50Hz\n\n    while(1) {\n        // Intercambiar estado (Toggle) PB2 usando XOR en Output Data\n        GPIOB->ODATA ^= (1 << 2);\n        delay_ms(200); // 200 ms\n    }\n}\n`
 };
 let currentFile = 'main.c';
+let lastCompileMarkers = {};
 
 // Cargar Monaco Editor
 require(['vs/editor/editor.main'], function () {
@@ -102,6 +103,8 @@ function loadFile(filename) {
     const ext = filename.split('.').pop();
     const lang = (ext === 'h' || ext === 'c' || ext === 'cpp') ? 'c' : 'plaintext';
     monaco.editor.setModelLanguage(editor.getModel(), lang);
+    
+    monaco.editor.setModelMarkers(editor.getModel(), "compiler", lastCompileMarkers[filename] || []);
     
     renderFileList();
 }
@@ -285,6 +288,9 @@ flashBtn.onclick = async () => {
         logmsg("---------------------------------------");
         logmsg("1/3 Sending code to Compiler API...", "warn");
         
+        lastCompileMarkers = {};
+        if (editor) monaco.editor.setModelMarkers(editor.getModel(), "compiler", []);
+        
         saveCurrentFile();
         const res = await fetch(`${CONFIG.API_URL}/compile`, {
             method: 'POST',
@@ -294,7 +300,39 @@ flashBtn.onclick = async () => {
         
         if(!res.ok) {
             const errLog = await res.json();
-            logmsg("Error Reason: " + errLog.details, "error");
+            const rawError = errLog.details || '';
+            
+            // Parse GCC Errors
+            const lines = rawError.split('\n');
+            const regex = /(?:src|inc)\/([a-zA-Z0-9_\-\.]+):(\d+):.*?(error|warning):\s+(.*)/i;
+            
+            for (let line of lines) {
+                const match = line.match(regex);
+                if (match) {
+                    const [, filename, lineNum, severity, message] = match;
+                    if (!lastCompileMarkers[filename]) lastCompileMarkers[filename] = [];
+                    
+                    lastCompileMarkers[filename].push({
+                        startLineNumber: parseInt(lineNum, 10),
+                        startColumn: 1,
+                        endLineNumber: parseInt(lineNum, 10),
+                        endColumn: 1000,
+                        message: message,
+                        severity: severity.toLowerCase() === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error
+                    });
+                }
+            }
+
+            const errorFiles = Object.keys(lastCompileMarkers);
+            if (errorFiles.length > 0) {
+                if (!errorFiles.includes(currentFile)) {
+                    loadFile(errorFiles[0]); // auto-switch to first errored file
+                } else {
+                    monaco.editor.setModelMarkers(editor.getModel(), "compiler", lastCompileMarkers[currentFile]);
+                }
+            }
+            
+            logmsg("Error Reason:\n" + rawError, "error");
             throw new Error("Compilation Failed");
         }
 
