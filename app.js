@@ -3,7 +3,7 @@ require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-e
 let editor;
 
 let virtualFS = {
-    'main.c': `#include "apm32f10x.h"\n#include "delay.h"\n\nint main(void) {\n    // Configura relojes base automáticamente\n    APM32_Init();\n    \n    // Activar reloj GPIOB\n    RCM->APB2CLKEN |= (1 << 3);\n    \n    // Configurar PB2 como salida Push-Pull (0x3)\n    // El puerto B (pines 0 a 7) está controlado por CFGLOW.\n    // El pin 2 está desplazado ((pin) * 4) -> 8.\n    GPIOB->CFGLOW &= ~(0x0F << 8); // Reset\n    GPIOB->CFGLOW |=  (0x03 << 8); // Set a Out_PP 50Hz\n\n    while(1) {\n        // Intercambiar estado (Toggle) PB2 usando XOR en Output Data\n        GPIOB->ODATA ^= (1 << 2);\n        delay_ms(200); // 200 ms\n    }\n}\n`
+    'main.c': `// Cargando entorno...`
 };
 let currentFile = 'main.c';
 let lastCompileMarkers = {};
@@ -37,59 +37,71 @@ const fileList = document.getElementById('fileList');
 
 let lastCompiledBinary = null;
 
-const EXAMPLES = {
-    blink: `#include "apm32f10x.h"
-#include "delay.h"
-
-int main(void) {
-    APM32_Init();
-    RCM->APB2CLKEN |= (1 << 3); // GPIOB
-    GPIOB->CFGLOW &= ~(0x0F << 8); // Reset PB2
-    GPIOB->CFGLOW |=  (0x03 << 8); // Out_PP 50Hz
-    while(1) {
-        GPIOB->ODATA ^= (1 << 2);
-        delay_ms(200);
-    }
-}`,
-    timer: `#include "apm32f10x.h"
-#include "delay.h"
-
-int main(void) {
-    APM32_Init();
-    RCM->APB2CLKEN |= (1 << 3); // GPIOB
-    GPIOB->CFGLOW &= ~(0x0F << 8);
-    GPIOB->CFGLOW |=  (0x03 << 8);
-    while(1) {
-        GPIOB->ODATA |= (1 << 2);
-        delay_ms(1000);
-        GPIOB->ODATA &= ~(1 << 2);
-        delay_ms(100);
-    }
-}`,
-    registers: `#include "apm32f10x.h"
-
-int main(void) {
-    // Basic direct register initialization
-    SystemInit();
-    RCM->APB2CLKEN |= 0x00000008; // Enable Port B
-    GPIOB->CFGLOW = 0x44444344;   // PB2 as Output 50MHz
-    while(1) {
-        GPIOB->BSCLR = (1 << 2); // Set
-        for(int i=0; i<1000000; i++) __NOP();
-        GPIOB->BRCLR = (1 << 2); // Reset
-        for(int i=0; i<1000000; i++) __NOP();
-    }
-}`
-};
+let dynamicExamples = [];
 
 exampleSelector.onchange = () => {
-    const val = exampleSelector.value;
-    if (EXAMPLES[val]) {
-        virtualFS = { 'main.c': EXAMPLES[val] };
-        loadFile('main.c');
-        logmsg(`Example '${val}' loaded into workspace.`, 'info');
+    if (exampleSelector.value) {
+        loadExample(exampleSelector.value);
     }
 };
+
+async function loadExample(val) {
+    const exampleDef = dynamicExamples.find(e => e.id === val);
+    
+    if (exampleDef) {
+        try {
+            logmsg(`Fetching '${exampleDef.name}'...`, "warn");
+            const fetchedFiles = {};
+            
+            for (const file of exampleDef.files) {
+                const res = await fetch(`examples/${exampleDef.id}/${file}`);
+                if (!res.ok) throw new Error(`Failed to load ${file}`);
+                fetchedFiles[file] = await res.text();
+            }
+            
+            virtualFS = fetchedFiles;
+            currentFile = exampleDef.files.includes('main.c') ? 'main.c' : exampleDef.files[0];
+            
+            if (editor) {
+                editor.setValue(virtualFS[currentFile]);
+                monaco.editor.setModelLanguage(editor.getModel(), 'c');
+                
+                lastCompileMarkers = {};
+                monaco.editor.setModelMarkers(editor.getModel(), "compiler", []);
+                
+                renderFileList();
+            }
+            logmsg(`Workspace updated successfully!`, 'success');
+        } catch (err) {
+            logmsg(`Error loading workspace: ${err.message}`, "error");
+        } finally {
+            exampleSelector.value = ""; // reset dropdown visually
+        }
+    }
+}
+
+async function loadExampleRegistry() {
+    try {
+        const response = await fetch('examples/index.json');
+        if (!response.ok) throw new Error("Index not found");
+        dynamicExamples = await response.json();
+        
+        dynamicExamples.forEach(ex => {
+            const opt = document.createElement('option');
+            opt.value = ex.id;
+            opt.textContent = ex.name;
+            exampleSelector.appendChild(opt);
+        });
+        
+        // Autoload the first example as the initial boilerplate
+        if (dynamicExamples.length > 0) {
+            await loadExample(dynamicExamples[0].id);
+        }
+    } catch (err) {
+        console.warn("Could not load examples registry:", err);
+    }
+}
+loadExampleRegistry();
 
 function saveCurrentFile() {
     if (editor) virtualFS[currentFile] = editor.getValue();
@@ -122,9 +134,39 @@ function renderFileList() {
         div.appendChild(nameSpan);
 
         if (filename !== 'main.c') {
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = "flex gap-1 items-center";
+            
+            const renameBtn = document.createElement('button');
+            renameBtn.innerHTML = '✏️';
+            renameBtn.className = 'text-gray-500 hover:text-blue-600 text-[10px] px-1';
+            renameBtn.title = "Rename File";
+            renameBtn.onclick = (e) => {
+                e.stopPropagation();
+                let newFilename = prompt("Enter new file name:", filename);
+                if (!newFilename) return;
+                newFilename = newFilename.trim();
+                
+                if (newFilename === filename) return;
+                if (virtualFS[newFilename] !== undefined) {
+                    alert("A file with that name already exists!");
+                    return;
+                }
+                
+                // Perform rename
+                virtualFS[newFilename] = virtualFS[filename];
+                delete virtualFS[filename];
+                
+                if (currentFile === filename) {
+                    currentFile = newFilename;
+                }
+                renderFileList();
+            };
+            actionsDiv.appendChild(renameBtn);
+
             const delBtn = document.createElement('button');
             delBtn.innerHTML = '&times;';
-            delBtn.className = 'text-red-500 hover:text-red-700 font-bold px-2';
+            delBtn.className = 'text-red-500 hover:text-red-700 font-bold px-1';
             delBtn.title = "Delete File";
             delBtn.onclick = (e) => {
                 e.stopPropagation();
@@ -134,7 +176,8 @@ function renderFileList() {
                     else renderFileList();
                 }
             };
-            div.appendChild(delBtn);
+            actionsDiv.appendChild(delBtn);
+            div.appendChild(actionsDiv);
         }
         
         fileList.appendChild(div);
