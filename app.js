@@ -2,37 +2,21 @@ require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-e
 
 let editor;
 
+let virtualFS = {
+    'main.c': `#include "apm32f10x.h"\n#include "delay.h"\n\nint main(void) {\n    // Configura relojes base automáticamente\n    APM32_Init();\n    \n    // Activar reloj GPIOB\n    RCM->APB2CLKEN |= (1 << 3);\n    \n    // Configurar PB2 como salida Push-Pull (0x3)\n    // El puerto B (pines 0 a 7) está controlado por CFGLOW.\n    // El pin 2 está desplazado ((pin) * 4) -> 8.\n    GPIOB->CFGLOW &= ~(0x0F << 8); // Reset\n    GPIOB->CFGLOW |=  (0x03 << 8); // Set a Out_PP 50Hz\n\n    while(1) {\n        // Intercambiar estado (Toggle) PB2 usando XOR en Output Data\n        GPIOB->ODATA ^= (1 << 2);\n        delay_ms(200); // 200 ms\n    }\n}\n`
+};
+let currentFile = 'main.c';
+
 // Cargar Monaco Editor
 require(['vs/editor/editor.main'], function () {
     editor = monaco.editor.create(document.getElementById('editor'), {
-        value: `#include "apm32f10x.h"
-#include "delay.h"
-
-int main(void) {
-    // Configura relojes base automáticamente
-    APM32_Init();
-    
-    // Activar reloj GPIOB
-    RCM->APB2CLKEN |= (1 << 3);
-    
-    // Configurar PB2 como salida Push-Pull (0x3)
-    // El puerto B (pines 0 a 7) está controlado por CFGLOW.
-    // El pin 2 está desplazado ((pin) * 4) -> 8.
-    GPIOB->CFGLOW &= ~(0x0F << 8); // Reset
-    GPIOB->CFGLOW |=  (0x03 << 8); // Set a Out_PP 50Hz
-
-    while(1) {
-        // Intercambiar estado (Toggle) PB2 usando XOR en Output Data
-        GPIOB->ODATA ^= (1 << 2);
-        delay_ms(200); // 200 ms
-    }
-}
-`,
+        value: virtualFS['main.c'],
         language: 'c',
         theme: 'vs-dark',
         automaticLayout: true,
         minimap: { enabled: false }
     });
+    renderFileList();
 });
 
 // Configuración Global
@@ -46,7 +30,9 @@ const disconnectBtn = document.getElementById('disconnectBtn');
 const flashBtn = document.getElementById('flashBtn');
 const exampleSelector = document.getElementById('exampleSelector');
 const downloadBtn = document.getElementById('downloadBtn');
-const downloadCBtn = document.getElementById('downloadCBtn');
+const downloadZipBtn = document.getElementById('downloadZipBtn');
+const newFileBtn = document.getElementById('newFileBtn');
+const fileList = document.getElementById('fileList');
 
 let lastCompiledBinary = null;
 
@@ -98,9 +84,70 @@ int main(void) {
 exampleSelector.onchange = () => {
     const val = exampleSelector.value;
     if (EXAMPLES[val]) {
-        editor.setValue(EXAMPLES[val]);
-        logmsg(`Example '${val}' loaded into editor.`, 'info');
+        virtualFS = { 'main.c': EXAMPLES[val] };
+        loadFile('main.c');
+        logmsg(`Example '${val}' loaded into workspace.`, 'info');
     }
+};
+
+function saveCurrentFile() {
+    if (editor) virtualFS[currentFile] = editor.getValue();
+}
+
+function loadFile(filename) {
+    saveCurrentFile();
+    currentFile = filename;
+    editor.setValue(virtualFS[filename]);
+    
+    const ext = filename.split('.').pop();
+    const lang = (ext === 'h' || ext === 'c' || ext === 'cpp') ? 'c' : 'plaintext';
+    monaco.editor.setModelLanguage(editor.getModel(), lang);
+    
+    renderFileList();
+}
+
+function renderFileList() {
+    fileList.innerHTML = '';
+    for (const filename in virtualFS) {
+        const div = document.createElement('div');
+        div.className = `p-2 cursor-pointer rounded flex justify-between items-center text-sm ${filename === currentFile ? 'bg-blue-100 border border-blue-300 font-semibold' : 'bg-gray-50 hover:bg-gray-100 border border-transparent'}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = filename;
+        nameSpan.className = 'truncate max-w-[120px] block';
+        nameSpan.onclick = () => loadFile(filename);
+        div.appendChild(nameSpan);
+
+        if (filename !== 'main.c') {
+            const delBtn = document.createElement('button');
+            delBtn.innerHTML = '&times;';
+            delBtn.className = 'text-red-500 hover:text-red-700 font-bold px-2';
+            delBtn.title = "Delete File";
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                if(confirm("Delete " + filename + "?")) {
+                    delete virtualFS[filename];
+                    if (currentFile === filename) loadFile('main.c');
+                    else renderFileList();
+                }
+            };
+            div.appendChild(delBtn);
+        }
+        
+        fileList.appendChild(div);
+    }
+}
+
+newFileBtn.onclick = () => {
+    let filename = prompt("Enter file name (e.g., utils.c, config.h):");
+    if (!filename) return;
+    filename = filename.trim();
+    if (virtualFS[filename] !== undefined) {
+        alert("File already exists!");
+        return;
+    }
+    virtualFS[filename] = '// ' + filename + '\n';
+    loadFile(filename);
 };
 
 downloadBtn.onclick = () => {
@@ -114,16 +161,20 @@ downloadBtn.onclick = () => {
     URL.revokeObjectURL(url);
 };
 
-downloadCBtn.onclick = () => {
-    const code = editor.getValue();
-    const blob = new Blob([code], { type: 'text/plain' });
+downloadZipBtn.onclick = async () => {
+    saveCurrentFile();
+    const zip = new JSZip();
+    for (const filename in virtualFS) {
+        zip.file(filename, virtualFS[filename]);
+    }
+    const blob = await zip.generateAsync({type: "blob"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'main.c';
+    a.download = 'apm32_project.zip';
     a.click();
     URL.revokeObjectURL(url);
-    logmsg("Downloaded main.c successfully.", "success");
+    logmsg("Downloaded project as ZIP successfully.", "success");
 };
 
 function logmsg(msg, type='info') {
@@ -234,11 +285,11 @@ flashBtn.onclick = async () => {
         logmsg("---------------------------------------");
         logmsg("1/3 Sending code to Compiler API...", "warn");
         
-        const code = editor.getValue();
+        saveCurrentFile();
         const res = await fetch(`${CONFIG.API_URL}/compile`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ mainContent: code })
+            body: JSON.stringify({ files: virtualFS })
         });
         
         if(!res.ok) {
