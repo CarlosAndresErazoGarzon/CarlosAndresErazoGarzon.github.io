@@ -23,10 +23,7 @@
                 <option value="timer">Timer Toggle</option>
                 <option value="registers">Direct Reg Access</option>
             </select>
-        </div>
         <div class="flex space-x-4">
-            <button id="downloadZipBtn" class="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded shadow font-semibold flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> Download ZIP</button>
-            <button id="downloadBtn" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded shadow font-semibold hidden">Download .bin</button>
             <button id="connectBtn" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded shadow font-semibold">1. Connect USB</button>
             <button id="disconnectBtn" class="bg-red-600 hover:bg-red-500 px-4 py-2 rounded shadow font-semibold hidden">Disconnect</button>
             <button id="flashBtn" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded shadow font-semibold opacity-50 cursor-not-allowed" disabled>2. Compile & Flash</button>
@@ -44,6 +41,17 @@
             </div>
             <div id="fileList" class="flex-grow overflow-y-auto p-2 space-y-1">
                 <!-- files will be injected here -->
+            </div>
+            
+            <!-- Sidebar Bottom Actions -->
+            <div class="p-3 border-t border-gray-300 bg-gray-50 flex flex-col gap-2">
+                <button id="downloadZipBtn" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-2 text-sm rounded shadow font-semibold flex items-center justify-center gap-2 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> 
+                    Download ZIP
+                </button>
+                <button id="downloadBtn" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 text-sm rounded shadow font-semibold transition-colors hidden">
+                    Download .bin
+                </button>
             </div>
         </div>
 
