@@ -1,7 +1,17 @@
 [
-    {
-        "id": "default",
-        "name": "Código Base",
-        "files": ["main.c"]
+    { 
+        "id": "default", 
+        "name": "Blink Simple", 
+        "files": ["src/main.c", "src/apm32_config.c", "src/delay.c", "inc/apm32_config.h", "inc/delay.h"] 
+    },
+    { 
+        "id": "uart_echo", 
+        "name": "USB UART Echo", 
+        "files": ["src/main.c", "src/apm32_config.c", "src/uart.c", "src/delay.c", "inc/apm32_config.h", "inc/uart.h", "inc/delay.h"] 
+    },
+    { 
+        "id": "led_sequence", 
+        "name": "LED Progress Sequence", 
+        "files": ["src/main.c", "src/apm32_config.c", "src/delay.c", "inc/apm32_config.h", "inc/delay.h"] 
     }
 ]

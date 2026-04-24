@@ -3,70 +3,304 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>APM32 Educational Web Portal</title>
+    <title>APM32 // CYBER-IDE</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Silkscreen&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/dapjs/dist/dap.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        #editor { width: 100%; height: calc(100vh - 300px); border: 1px solid #333; }
-        .log-box { height: 180px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-family: monospace; padding: 10px; border-bottom: 2px solid #555; }
+        :root {
+            --neon-blue: #00f2ff;
+            --neon-purple: #bc13fe;
+            --terminal-bg: #0a0a12;
+            --sidebar-bg: #0f0f1a;
+            --border-color: #2e2e4a;
+            --header-color: #00f2ff;
+            --text-main: #d1d1e0;
+            --log-bg: #050510;
+            
+            /* Sidebar variables */
+            --sidebar-text: #6366f1;
+            --header-text: #4338ca;
+            --active-text: #00f2ff;
+            --active-bg: rgba(0, 242, 255, 0.1);
+            --active-border: #00f2ff;
+
+            /* Button variables */
+            --btn-blue-bg: #1e1b4b; 
+            --btn-blue-text: #818cf8;
+            --btn-green-bg: #064e3b;
+            --btn-green-text: #10b981;
+            --btn-red-bg: #450a0a;
+            --btn-red-text: #f87171;
+            --btn-amber-bg: #451a03;
+            --btn-amber-text: #f59e0b;
+        }
+        
+        body.light-theme {
+            --terminal-bg: #f8fafc;
+            --sidebar-bg: #ffffff;
+            --border-color: #94a3b8;
+            --header-color: #312e81; 
+            --text-main: #0f172a;
+            --log-bg: #f1f5f9;
+
+            /* Sidebar Light overrides */
+            --sidebar-text: #334155;
+            --header-text: #0f172a;
+            --active-text: #312e81;
+            --active-bg: #eff6ff;
+            --active-border: #312e81;
+
+            /* Button Light overrides - Mas contrastados */
+            --btn-blue-bg: #312e81;  /* Azul Indigo oscuro */
+            --btn-blue-text: #ffffff; /* Texto blanco para legibilidad */
+            --btn-green-bg: #065f46;
+            --btn-green-text: #ffffff;
+            --btn-red-bg: #991b1b;
+            --btn-red-text: #ffffff;
+            --btn-amber-bg: #92400e; /* Marrón ámbar oscuro */
+            --btn-amber-text: #ffffff;
+        }
+
+        body {
+            background-color: var(--terminal-bg);
+            background-image: 
+                linear-gradient(var(--border-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+            background-size: 30px 30px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 15px; /* Agrandamos un punto la letra general */
+            color: var(--text-main);
+            transition: all 0.3s ease;
+        }
+        
+        body.light-theme .scanlines { display: none; }
+        
+        .retro-header { font-family: 'Silkscreen', cursive; color: var(--header-color); }
+        .terminal-text { font-family: 'VT323', monospace; }
+        
+        #editor { 
+            width: 100%; 
+            height: calc(100vh - 320px); 
+            border: 2px solid var(--border-color);
+        }
+        
+        /* Scanline effect */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+            z-index: 100;
+            opacity: 0.2;
+        }
+
+        .neon-btn {
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border: 2px solid transparent;
+        }
+        .neon-btn:hover {
+            box-shadow: 0 0 15px currentColor;
+            filter: brightness(1.2);
+            transform: translateY(-1px);
+        }
+
+        .log-box { 
+            height: 180px; 
+            overflow-y: auto; 
+            background-color: var(--log-bg); 
+            color: #00dd00; 
+            font-family: 'VT323', monospace; 
+            font-size: 1.3rem; /* También un poco más grande */
+            padding: 15px; 
+            border: 2px solid var(--border-color);
+            position: relative;
+        }
+        body.light-theme .log-box { color: #064e3b; font-weight: bold; }
+        
+        .log-box::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(transparent 50%, rgba(0, 255, 0, 0.02) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        /* Customize scrollbars */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--terminal-bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* ... existing styles ... */
+        .terminal-bg { background-color: #0c0c14; border-top: 2px solid var(--border-color); }
+        .serial-log { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #a3be8c; overflow-y: auto; height: 150px; }
+        
+        /* Modal for Docs */
+        #docsModal article { color: var(--text-main); line-height: 1.6; }
+        #docsModal h1, #docsModal h2, #docsModal h3 { color: var(--header-text); font-weight: bold; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+        #docsModal table { width: 100%; border-collapse: collapse; margin-block: 1rem; font-size: 0.9em; }
+        #docsModal th, #docsModal td { border: 1px solid var(--border-color); padding: 8px; text-align: left; }
+        #docsModal th { background: var(--log-bg); }
+        #docsModal code { background: var(--log-bg); padding: 2px 4px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; }
+        #docsModal pre { background: var(--log-bg); padding: 1rem; border-radius: 4px; overflow-x: auto; margin-block: 1rem; border-left: 4px solid var(--active-border); }
+        .doc-tab.active { background: var(--active-bg); border-bottom: 2px solid var(--active-border); color: var(--header-text); }
+        .doc-tab:not(.active) { opacity: 0.6; }
     </style>
 </head>
-<body class="bg-gray-100 flex flex-col h-screen overflow-hidden pb-4">
-    <!-- Navbar -->
-    <nav class="bg-blue-800 p-4 text-white flex justify-between items-center shadow-lg">
-        <div class="flex items-center space-x-4">
-            <div class="font-bold text-xl">APM32 Web IDE</div>
-            <select id="exampleSelector" class="bg-blue-700 text-white border-none rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
-                <option value="">-- Load Example --</option>
-            </select>
-        <div class="flex space-x-4">
-            <button id="connectBtn" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded shadow font-semibold">1. Connect USB</button>
-            <button id="disconnectBtn" class="bg-red-600 hover:bg-red-500 px-4 py-2 rounded shadow font-semibold hidden">Disconnect</button>
-            <button id="flashBtn" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded shadow font-semibold opacity-50 cursor-not-allowed" disabled>2. Compile & Flash</button>
+<body class="flex flex-col h-screen overflow-hidden">
+    <div class="scanlines" style="z-index: 1;"></div>
+
+    <!-- Top Navigation -->
+    <nav class="bg-[var(--sidebar-bg)] p-3 lg:p-4 flex flex-col lg:flex-row gap-3 justify-between items-center border-b-2 border-[var(--border-color)] shadow-lg z-[60] relative">
+        <div class="flex items-center justify-between w-full lg:w-auto">
+            <div class="flex items-center space-x-3">
+                <!-- Sidebar Toggle -->
+                <button id="mobileMenuBtn" class="p-2 text-[var(--header-color)] hover:bg-white/10 rounded transition-colors" title="Toggle File Tree">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                </button>
+                <div id="projectTitle" class="retro-header text-[6px] leading-[1] lg:text-[7px] whitespace-pre font-mono opacity-80 overflow-hidden select-none">
+                    <!-- Dynamic ASCII Art -->
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 w-full lg:w-auto overflow-x-auto no-scrollbar pb-1 lg:pb-0">
+            <div class="relative flex-shrink-0">
+                <select id="exampleSelector" class="bg-[var(--log-bg)] text-[var(--header-color)] border border-[var(--border-color)] rounded px-3 py-1.5 text-[10px] lg:text-xs focus:ring-1 focus:ring-cyan-500 outline-none cursor-pointer appearance-none pr-8">
+                    <option value="">:: EXAMPLES ::</option>
+                </select>
+            </div>
+
+            <button id="connectBtn" class="neon-btn flex-shrink-0 px-3 lg:px-4 py-1.5 lg:py-2 rounded-sm text-[10px] font-bold flex items-center gap-2" style="background-color: var(--btn-blue-bg); color: var(--btn-blue-text); border-color: var(--btn-blue-text); position: relative; z-index: 70;">
+                Link
+            </button>
+            <button id="disconnectBtn" class="neon-btn flex-shrink-0 px-3 lg:px-4 py-1.5 lg:py-2 rounded-sm text-[10px] font-bold hidden" style="background-color: var(--btn-red-bg); color: var(--btn-red-text); border-color: var(--btn-red-text); position: relative; z-index: 70;">
+                STOP
+            </button>
+            <button id="flashBtn" class="neon-btn flex-shrink-0 px-3 lg:px-4 py-1.5 lg:py-2 rounded-sm text-[10px] font-bold opacity-50" disabled style="background-color: var(--btn-green-bg); color: var(--btn-green-text); border-color: var(--btn-green-text); position: relative; z-index: 70;">
+                UPLOAD
+            </button>
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <div class="flex-grow flex p-4 w-full h-full max-w-7xl mx-auto gap-4">
+    <!-- Workspace -->
+    <div class="flex-grow flex flex-col lg:flex-row p-3 lg:p-6 gap-0 lg:gap-6 min-h-0 bg-transparent relative overflow-hidden">
         
-        <!-- Sidebar -->
-        <div class="w-48 bg-white shadow-md rounded border border-gray-300 flex flex-col flex-shrink-0">
-            <div class="p-3 bg-gray-200 font-bold border-b border-gray-300 flex justify-between items-center text-sm">
-                <span class="text-gray-800">Files</span>
-                <button id="newFileBtn" class="bg-blue-600 hover:bg-blue-500 text-white rounded w-6 h-6 flex items-center justify-center font-bold" title="New source file">+</button>
+        <!-- Sidebar / Drawer (Unified Pushing Toggle) -->
+        <div id="sidebar" class="fixed lg:relative top-0 left-0 h-full lg:h-auto bg-[var(--sidebar-bg)] border-r lg:border-2 border-[var(--border-color)] lg:rounded-lg flex-col flex-shrink-0 shadow-2xl z-50 transition-all duration-300 ease-in-out flex w-64 overflow-hidden mb-0 lg:mb-0">
+            <div class="p-4 bg-indigo-950/5 border-b border-[var(--border-color)] flex justify-between items-center flex-shrink-0">
+                <span class="retro-header text-[10px] tracking-widest uppercase">Files</span>
+                <div class="flex items-center gap-2">
+                    <button id="newFileBtn" class="w-6 h-6 bg-cyan-600/20 hover:bg-cyan-500/40 text-[var(--header-color)] border border-[var(--border-color)] rounded flex items-center justify-center font-bold font-sans transition-all">+</button>
+                </div>
             </div>
-            <div id="fileList" class="flex-grow overflow-y-auto p-2 space-y-1">
-                <!-- files will be injected here -->
+            <div id="fileList" class="flex-grow overflow-y-auto p-3 space-y-2 min-w-[240px]">
+                <!-- dynamic files -->
             </div>
             
-            <!-- Sidebar Bottom Actions -->
-            <div class="p-3 border-t border-gray-300 bg-gray-50 flex flex-col gap-2">
-                <button id="downloadZipBtn" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-2 text-sm rounded shadow font-semibold flex items-center justify-center gap-2 transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> 
-                    Download ZIP
+            <div class="p-4 border-t border-[var(--border-color)] bg-black/5 flex flex-col gap-3 min-w-[240px]">
+                <button id="downloadBtn" class="neon-btn hidden w-full py-2 text-[10px] rounded font-bold flex items-center justify-center gap-2" style="background-color: var(--btn-green-bg); color: var(--btn-green-text); border-color: var(--btn-green-text); position: relative; z-index: 60;">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    DOWNLOAD .BIN
                 </button>
-                <button id="downloadBtn" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 text-sm rounded shadow font-semibold transition-colors hidden">
-                    Download .bin
+                <button id="downloadZipBtn" class="neon-btn w-full py-2 text-[10px] rounded font-bold flex items-center justify-center gap-2" style="background-color: var(--btn-amber-bg); color: var(--btn-amber-text); border-color: var(--btn-amber-text); position: relative; z-index: 60;">
+                    EXPORT_ZIP
                 </button>
+                
+                <!-- Sidebar Utility Footer -->
+                <div class="flex items-center justify-between mt-1 pt-3 border-t border-[var(--border-color)]/30">
+                    <div class="flex items-center gap-1">
+                        <button id="showDocsBtn" class="p-2 text-[var(--sidebar-text)] hover:text-indigo-400 hover:bg-white/5 rounded-md transition-all" title="Hardware Reference">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                        </button>
+                        <button id="openTerminalBtn" class="p-2 text-[var(--sidebar-text)] hover:text-emerald-400 hover:bg-white/5 rounded-md transition-all" title="Serial Monitor">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        </button>
+                        <button id="themeToggle" class="p-2 text-[var(--sidebar-text)] hover:text-yellow-500 hover:bg-white/5 rounded-md transition-all" title="Toggle Theme">
+                            <svg id="themeIcon" class="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"></path></svg>
+                        </button>
+                    </div>
+                    <div class="text-[8px] font-mono text-white/20 px-2 select-none">v1.2.0</div>
+                </div>
             </div>
         </div>
 
-        <div class="flex-grow flex flex-col space-y-4 min-w-0">
-            <!-- Editor -->
-            <div class="flex-grow shadow-lg relative">
+        <!-- Overlay for Mobile Sidebar -->
+        <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-40 hidden lg:hidden"></div>
+
+        <!-- Main Area -->
+        <div class="flex-grow flex flex-col space-y-3 lg:space-y-6 min-w-0 h-full">
+            <!-- Editor Container -->
+            <div class="flex-grow rounded-lg overflow-hidden border border-[var(--border-color)] shadow-2xl bg-[#0f0f1a] min-h-0">
                 <div id="editor"></div>
             </div>
 
-            <!-- Terminal / Logs -->
-            <div class="log-box rounded shadow-md border-t-4 border-gray-600" id="logBox">
-                <div class="text-blue-400">>> Ready. Write your C code. Compilation runs securely in the cloud.</div>
+            <!-- Console -->
+            <div class="log-box rounded-lg shadow-inner flex-grow flex flex-col min-h-0" id="logBox">
+                <div class="text-cyan-400 terminal-text text-base lg:text-lg italic p-2">>> SYSTEM_READY...</div>
+            </div>
+
+        </div> <!-- End of Main Area -->
+    </div> <!-- End of Workspace -->
+
+    <!-- Serial Terminal Pane (Status Bar Style) -->
+    <div id="terminalPane" class="bg-[#0a0a0f] border-t-2 border-[var(--border-color)] z-[70] transition-all duration-300 h-8 flex flex-col overflow-hidden shrink-0">
+        <div class="flex items-center justify-between px-4 h-8 min-h-[2rem] bg-[var(--sidebar-bg)] border-b border-[var(--border-color)] cursor-pointer" id="terminalHeader">
+            <div class="flex items-center gap-4">
+                <span class="text-[10px] font-bold uppercase tracking-widest text-cyan-400 flex items-center gap-2">
+                    <span id="serialStatusLed" class="w-2.5 h-2.5 rounded-full bg-slate-600 shadow-[0_0_5px_rgba(71,85,105,0.5)] transition-all duration-300"></span>
+                    Serial Monitor
+                </span>
+                <select id="baudRate" class="bg-black/40 text-[9px] border border-white/10 rounded px-2 py-0.5 text-white/60 focus:outline-none">
+                    <option value="9600">9600 baud</option>
+                    <option value="115200" selected>115200 baud</option>
+                </select>
+                <!-- Send Data Input -->
+                <div class="flex items-center gap-2 ml-4">
+                    <input id="serialInput" type="text" placeholder="Type command..." class="bg-black/40 text-[10px] border border-white/10 rounded px-3 py-1 text-emerald-400 focus:outline-none focus:border-emerald-500/50 w-48 transition-all">
+                    <button id="serialSendBtn" class="text-[9px] font-bold uppercase text-cyan-400 hover:text-cyan-300">Send</button>
+                </div>
+                <div class="flex gap-4 ml-6">
+                    <button id="serialConnectBtn" class="text-[9px] font-bold uppercase text-indigo-400 hover:text-indigo-300 underline underline-offset-4 decoration-indigo-500/30">Connect</button>
+                    <button id="serialClearBtn" class="text-[9px] font-bold uppercase text-white/30 hover:text-white/50">Clear</button>
+                </div>
+            </div>
+            <button id="toggleTerminalBtn" class="text-white/40 hover:text-white/100 p-1">
+                <svg class="w-4 h-4 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+        </div>
+        <div id="serialOutput" class="p-3 flex-grow overflow-y-auto font-mono text-[11px] text-emerald-400/90 whitespace-pre-wrap leading-relaxed bg-black/20 custom-scrollbar"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.30.1/min/vs/loader.min.js"></script>
+    <!-- Docs Modal -->
+    <div id="docsModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4 lg:p-12">
+        <div class="bg-[var(--sidebar-bg)] w-full max-w-5xl h-full rounded-lg border-2 border-[var(--border-color)] flex flex-col overflow-hidden shadow-2xl">
+            <div class="flex items-center justify-between bg-[#1a1a2e] border-b border-[var(--border-color)]">
+                <div class="flex" id="docTabs">
+                    <button onclick="loadDoc('PINOUT_APM32.md', this)" class="doc-tab active px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-[var(--header-color)] border-r border-[var(--border-color)] transition-all hover:bg-white/5">Pinout</button>
+                    <button onclick="loadDoc('TUTORIAL_1.md', this)" class="doc-tab px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-[var(--header-color)] border-r border-[var(--border-color)] transition-all hover:bg-white/5">Tutorial 1</button>
+                    <button onclick="loadDoc('TUTORIAL_2.md', this)" class="doc-tab px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-[var(--header-color)] border-r border-[var(--border-color)] transition-all hover:bg-white/5">Tutorial 2</button>
+                </div>
+                <button id="closeDocsBtn" class="mx-4 text-[10px] font-bold text-red-400 hover:text-red-300 uppercase tracking-widest px-3 py-1 border border-red-500/30 rounded bg-red-500/5">Close [Esc]</button>
+            </div>
+            <div id="docContent" class="flex-grow overflow-y-auto p-6 lg:p-10 prose prose-invert max-w-none bg-[var(--sidebar-bg)]">
+                <!-- md content -->
             </div>
         </div>
     </div>
 
-    <!-- Monaco Editor Loader -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.30.1/min/vs/loader.min.js"></script>
+    <!-- Scripts -->
+
     <script src="app.js"></script>
 </body>
 </html>

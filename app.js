@@ -3,21 +3,88 @@ require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-e
 let editor;
 
 let virtualFS = {
-    'main.c': `// Cargando entorno...`
+    'src/main.c': `#include "apm32f10x.h"\n#include "apm32_config.h"\n\n/* USER CODE BEGIN Includes */\n/* USER CODE END Includes */\n\nint main(void) {\n    // Configures clocks and selected components\n    APM32_Init();\n    \n    /* USER CODE BEGIN Init */\n    /* USER CODE END Init */\n\n    while(1) {\n        /* USER CODE BEGIN While */\n        GPIOB->ODATA ^= (1 << 2); // Toggle LED PB2\n        delay_ms(500);\n\n        /* USER CODE END While */\n    }\n    \n    return 0;\n}`,
+    'src/apm32_config.c': `#include "apm32_config.h"\n\n/* USER CODE BEGIN Includes */\n/* USER CODE END Includes */\n\nvoid APM32_Init(void) {\n    // System Initialization (Main Clocks)\n    SystemInit();\n    \n    // Initialization of selected components\n    SysTick_Init(); // Inicializar timer de delay\n    RCM->APB2CLKEN |= (1 << 3); // Habilitar reloj GPIOB\n    \n    // Configurar LED en PB2 como salida Push-Pull (50MHz)\n    GPIOB->CFGLOW = (GPIOB->CFGLOW & ~(0xF << 8)) | (0x3 << 8);\n\n    /* USER CODE BEGIN APM32_Init */\n    /* USER CODE END APM32_Init */\n}\n\n/* USER CODE BEGIN Private Functions */\n/* USER CODE END Private Functions */`,
+    'inc/apm32_config.h': `#ifndef APM_CFG\n#define APM_CFG\n#include "apm32f10x.h"\n\nvoid APM32_Init(void);\n\n#endif`,
+    'src/delay.c': `#include "delay.h"\n#include "apm32f10x.h"\n\nvolatile uint32_t msTicks = 0;\n\nvoid SysTick_Init(void) {\n    // Update SystemCoreClock variable in case HSE fails and HSI (8MHz) is used\n    SystemCoreClockUpdate();\n    \n    // Configure SysTick for 1ms intervals\n    if (SysTick_Config(SystemCoreClock / 1000)) {\n        while (1); // Error trap\n    }\n    \n    // Set SysTick to the highest priority (0) to prevent delay_ms() from deadlocking\n    NVIC_SetPriority(SysTick_IRQn, 0);\n}\n\nvoid delay_ms(uint32_t ms) {\n    uint32_t start = msTicks;\n    while ((msTicks - start) < ms);\n}\n\nvoid SysTick_Handler(void) {\n    msTicks++;\n}`,
+    'inc/delay.h': `#ifndef DELAY_H\n#define DELAY_H\n\n#include <stdint.h>\n\nextern volatile uint32_t msTicks;\n\n// Prototipos\nvoid SysTick_Init(void);\nvoid delay_ms(uint32_t ms);\n\n#endif`
 };
-let currentFile = 'main.c';
+let currentFile = 'src/main.c';
 let lastCompileMarkers = {};
+
+// Configuración de Temas
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+let isDark = localStorage.getItem('theme') !== 'light';
+
+// Mobile Sidebar Toggle
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+function toggleSidebar(show) {
+    if (show) {
+        sidebar.classList.remove('w-0', 'border-0', 'opacity-0', 'pointer-events-none');
+        sidebar.classList.add('w-64', 'border-r', 'lg:border-2');
+        if (window.innerWidth < 1024) {
+            sidebarOverlay.classList.remove('hidden');
+        }
+    } else {
+        sidebar.classList.add('w-0', 'border-0', 'opacity-0', 'pointer-events-none');
+        sidebar.classList.remove('w-64', 'border-r', 'lg:border-2');
+        sidebarOverlay.classList.add('hidden');
+    }
+}
+
+mobileMenuBtn.onclick = () => {
+    const isClosed = sidebar.classList.contains('w-0');
+    toggleSidebar(isClosed);
+};
+sidebarOverlay.onclick = () => toggleSidebar(false);
+
+// Inicialización: Abierto por defecto en desktop
+if (window.innerWidth >= 1024) {
+    sidebar.classList.remove('w-0', 'border-0', '-translate-x-full'); 
+    sidebar.classList.add('w-64', 'border-r', 'lg:border-2');
+} else {
+    toggleSidebar(false);
+}
+
+function applyTheme() {
+    if (!isDark) {
+        document.body.classList.add('light-theme');
+        themeIcon.innerHTML = `<path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>`;
+        if (editor) monaco.editor.setTheme('vs');
+    } else {
+        document.body.classList.remove('light-theme');
+        themeIcon.innerHTML = `<path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"></path>`;
+        if (editor) monaco.editor.setTheme('vs-dark');
+    }
+}
+
+themeToggle.onclick = () => {
+    isDark = !isDark;
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    applyTheme();
+    renderFileList();
+};
 
 // Cargar Monaco Editor
 require(['vs/editor/editor.main'], function () {
     editor = monaco.editor.create(document.getElementById('editor'), {
-        value: virtualFS['main.c'],
+        value: virtualFS[currentFile],
         language: 'c',
-        theme: 'vs-dark',
+        theme: isDark ? 'vs-dark' : 'vs',
         automaticLayout: true,
-        minimap: { enabled: false }
+        minimap: { enabled: false },
+        fontFamily: "'JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', monospace",
+        fontSize: 14
     });
+    applyTheme(); // Asegurar que el tema de monaco coincida
     renderFileList();
+    
+    // Wake up Render Backend (Free Tier) on load to avoid cold-start delays
+    fetch(`${CONFIG.API_URL}/health`).catch(() => {});
 });
 
 // Configuración Global
@@ -53,29 +120,32 @@ async function loadExample(val) {
             logmsg(`Fetching '${exampleDef.name}'...`, "warn");
             const fetchedFiles = {};
             
+            const cacheBuster = `?t=${Date.now()}`;
             for (const file of exampleDef.files) {
-                const res = await fetch(`examples/${exampleDef.id}/${file}`);
+                logmsg(`Loading ${file}...`, "warn");
+                const res = await fetch(`examples/${exampleDef.id}/${file}${cacheBuster}`);
                 if (!res.ok) throw new Error(`Failed to load ${file}`);
                 fetchedFiles[file] = await res.text();
             }
             
             virtualFS = fetchedFiles;
-            currentFile = exampleDef.files.includes('main.c') ? 'main.c' : exampleDef.files[0];
+            currentFile = Object.keys(fetchedFiles).find(f => f === 'main.c' || f.endsWith('/main.c')) || Object.keys(fetchedFiles)[0];
             
             if (editor) {
-                editor.setValue(virtualFS[currentFile]);
-                monaco.editor.setModelLanguage(editor.getModel(), 'c');
-                
+                const model = editor.getModel();
+                if (model) {
+                    editor.setValue(virtualFS[currentFile]);
+                    monaco.editor.setModelLanguage(model, 'c');
+                }
                 lastCompileMarkers = {};
                 monaco.editor.setModelMarkers(editor.getModel(), "compiler", []);
-                
                 renderFileList();
             }
-            logmsg(`Workspace updated successfully!`, 'success');
+            logmsg(`Workspace loaded: ${exampleDef.name}`, 'success');
         } catch (err) {
             logmsg(`Error loading workspace: ${err.message}`, "error");
         } finally {
-            exampleSelector.value = ""; // reset dropdown visually
+            exampleSelector.value = "";
         }
     }
 }
@@ -108,6 +178,7 @@ function saveCurrentFile() {
 }
 
 function loadFile(filename) {
+    if (filename === currentFile) return;
     saveCurrentFile();
     currentFile = filename;
     editor.setValue(virtualFS[filename]);
@@ -119,75 +190,161 @@ function loadFile(filename) {
     monaco.editor.setModelMarkers(editor.getModel(), "compiler", lastCompileMarkers[filename] || []);
     
     renderFileList();
+    if (window.innerWidth < 1024) toggleSidebar(false); // Solo cerrar en mobile/tablet
 }
-
 function renderFileList() {
     fileList.innerHTML = '';
+    
+    // Group files by folder
+    const groups = { 'src': [], 'inc': [], 'others': [] };
     for (const filename in virtualFS) {
-        const div = document.createElement('div');
-        div.className = `p-2 cursor-pointer rounded flex justify-between items-center text-sm ${filename === currentFile ? 'bg-blue-100 border border-blue-300 font-semibold' : 'bg-gray-50 hover:bg-gray-100 border border-transparent'}`;
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = filename;
-        nameSpan.className = 'truncate max-w-[120px] block';
-        nameSpan.onclick = () => loadFile(filename);
-        div.appendChild(nameSpan);
+        if (filename.startsWith('src/')) groups.src.push(filename);
+        else if (filename.startsWith('inc/')) groups.inc.push(filename);
+        else groups.others.push(filename);
+    }
 
-        if (filename !== 'main.c') {
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = "flex gap-1 items-center";
+    const renderGroup = (title, files) => {
+        if (files.length === 0) return;
+        
+        const fragment = document.createDocumentFragment();
+        
+        const header = document.createElement('div');
+        header.className = "flex items-center gap-2 text-[9px] font-bold uppercase mt-5 mb-2 px-1 tracking-[0.2em]";
+        header.style.color = "var(--header-text)"; // Usar variable de tema
+        header.innerHTML = `<span class="w-1.5 h-1.5 rounded-sm" style="background-color: var(--active-border)"></span> ${title}`;
+        fragment.appendChild(header);
+
+        files.sort().forEach(filename => {
+            const div = document.createElement('div');
+            const isActive = filename === currentFile;
             
-            const renameBtn = document.createElement('button');
-            renameBtn.innerHTML = '✏️';
-            renameBtn.className = 'text-gray-500 hover:text-blue-600 text-[10px] px-1';
-            renameBtn.title = "Rename File";
-            renameBtn.onclick = (e) => {
+            div.className = `group p-2.5 cursor-pointer rounded-sm flex justify-between items-center text-xs transition-all duration-200 border-l-2`;
+            div.onclick = () => loadFile(filename); // Toda el área es clickeable
+            
+            // Aplicar estilos según estado activo
+            if (isActive) {
+                div.style.backgroundColor = "var(--active-bg)";
+                div.style.color = "var(--active-text)";
+                div.style.borderColor = "var(--active-border)";
+                div.style.boxShadow = "inset 4px 0 10px rgba(0,0,0,0.05)";
+            } else {
+                div.style.backgroundColor = "transparent";
+                div.style.color = "var(--sidebar-text)";
+                div.style.borderColor = "transparent";
+            }
+
+            // Hover effect
+            div.onmouseenter = () => { if(!isActive) div.style.backgroundColor = "rgba(100,100,100,0.1)"; };
+            div.onmouseleave = () => { if(!isActive) div.style.backgroundColor = "transparent"; };
+            
+            const displayName = filename.split('/').pop();
+            
+            const nameContainer = document.createElement('div');
+            nameContainer.className = "flex items-center gap-3 overflow-hidden pointer-events-none";
+            
+            const isH = filename.endsWith('.h');
+            const iconColor = isH ? (isDark ? 'text-amber-500' : 'text-amber-600') : (isDark ? 'text-cyan-500' : 'text-cyan-600');
+            
+            nameContainer.innerHTML = `
+                <svg class="w-3.5 h-3.5 flex-shrink-0 ${iconColor} ${isActive ? 'animate-pulse' : ''}" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"></path></svg>
+                <span class="truncate font-medium tracking-wide">${displayName}</span>
+            `;
+            div.appendChild(nameContainer);
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = "relative flex items-center opacity-0 group-hover:opacity-100 transition-opacity";
+            
+            const menuBtn = document.createElement('button');
+            menuBtn.innerHTML = `
+                <svg class="w-4 h-4 text-indigo-400 hover:text-cyan-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                </svg>`;
+            menuBtn.className = "p-1 rounded hover:bg-white/10 transition-colors";
+            
+            const dropdown = document.createElement('div');
+            dropdown.className = "hidden absolute right-0 top-8 w-32 bg-[var(--sidebar-bg)] border border-[var(--border-color)] rounded shadow-2xl z-50 py-1 backdrop-blur-md file-dropdown";
+            
+            menuBtn.onclick = (e) => {
                 e.stopPropagation();
-                let newFilename = prompt("Enter new file name:", filename);
-                if (!newFilename) return;
-                newFilename = newFilename.trim();
+                document.querySelectorAll('.file-dropdown').forEach(d => { if(d !== dropdown) d.classList.add('hidden'); });
+                dropdown.classList.toggle('hidden');
+            };
+
+            const renameOpt = document.createElement('button');
+            renameOpt.className = "w-full text-left px-4 py-2 text-[10px] text-[var(--sidebar-text)] hover:bg-indigo-500/10 hover:text-[var(--active-text)] flex items-center uppercase tracking-tight font-bold";
+            renameOpt.innerText = `Rename`;
+            renameOpt.onclick = (e) => {
+                e.stopPropagation();
+                dropdown.classList.add('hidden');
+                let newBase = prompt("Rename to:", displayName);
+                if (!newBase || newBase.trim() === displayName) return;
                 
-                if (newFilename === filename) return;
-                if (virtualFS[newFilename] !== undefined) {
-                    alert("A file with that name already exists!");
+                const pathParts = filename.split('/');
+                pathParts.pop();
+                const folder = pathParts.length > 0 ? pathParts.join('/') + '/' : '';
+                const newFilename = folder + newBase.trim();
+                
+                if (virtualFS[newFilename]) {
+                    alert("File already exists!");
                     return;
                 }
                 
-                // Perform rename
                 virtualFS[newFilename] = virtualFS[filename];
                 delete virtualFS[filename];
-                
-                if (currentFile === filename) {
-                    currentFile = newFilename;
-                }
+                if (currentFile === filename) currentFile = newFilename;
                 renderFileList();
             };
-            actionsDiv.appendChild(renameBtn);
+            dropdown.appendChild(renameOpt);
 
-            const delBtn = document.createElement('button');
-            delBtn.innerHTML = '&times;';
-            delBtn.className = 'text-red-500 hover:text-red-700 font-bold px-1';
-            delBtn.title = "Delete File";
-            delBtn.onclick = (e) => {
-                e.stopPropagation();
-                if(confirm("Delete " + filename + "?")) {
-                    delete virtualFS[filename];
-                    if (currentFile === filename) loadFile('main.c');
-                    else renderFileList();
-                }
-            };
-            actionsDiv.appendChild(delBtn);
+            if (displayName !== 'main.c') {
+                const deleteOpt = document.createElement('button');
+                deleteOpt.className = "w-full text-left px-4 py-2 text-[10px] text-red-500 hover:bg-red-500/10 hover:text-red-600 flex items-center uppercase tracking-tight font-bold";
+                deleteOpt.innerText = `Delete`;
+                deleteOpt.onclick = (e) => {
+                    e.stopPropagation();
+                    dropdown.classList.add('hidden');
+                    if(confirm(`Delete ${displayName}?`)) {
+                        delete virtualFS[filename];
+                        if (currentFile === filename) {
+                            const nextFile = Object.keys(virtualFS)[0];
+                            loadFile(nextFile);
+                        } else {
+                            renderFileList();
+                        }
+                    }
+                };
+                dropdown.appendChild(deleteOpt);
+            }
+
+            actionsDiv.appendChild(menuBtn);
+            actionsDiv.appendChild(dropdown);
             div.appendChild(actionsDiv);
-        }
+            fragment.appendChild(div);
+        });
         
-        fileList.appendChild(div);
-    }
+        fileList.appendChild(fragment);
+    };
+
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.file-dropdown').forEach(d => d.classList.add('hidden'));
+    });
+
+    renderGroup('Source Files (src)', groups.src);
+    renderGroup('Header Files (inc)', groups.inc);
+    renderGroup('Others', groups.others);
 }
 
 newFileBtn.onclick = () => {
     let filename = prompt("Enter file name (e.g., utils.c, config.h):");
     if (!filename) return;
     filename = filename.trim();
+    
+    // Auto-organize into folders if not specified
+    if (!filename.includes('/')) {
+        const ext = filename.split('.').pop();
+        filename = (ext === 'h') ? 'inc/' + filename : 'src/' + filename;
+    }
+
     if (virtualFS[filename] !== undefined) {
         alert("File already exists!");
         return;
@@ -196,16 +353,18 @@ newFileBtn.onclick = () => {
     loadFile(filename);
 };
 
-downloadBtn.onclick = () => {
-    if (!lastCompiledBinary) return;
-    const blob = new Blob([lastCompiledBinary], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'firmware.bin';
-    a.click();
-    URL.revokeObjectURL(url);
-};
+if (downloadBtn) {
+    downloadBtn.onclick = () => {
+        if (!lastCompiledBinary) return;
+        const blob = new Blob([lastCompiledBinary], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'firmware.bin';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+}
 
 downloadZipBtn.onclick = async () => {
     saveCurrentFile();
@@ -224,10 +383,10 @@ downloadZipBtn.onclick = async () => {
 };
 
 function logmsg(msg, type='info') {
-    let color = '#d4d4d4';
-    if(type === 'error') color = '#ff5b5b';
-    if(type === 'success') color = '#a3be8c';
-    if(type === 'warn') color = '#ebcb8b';
+    let color = isDark ? '#d4d4d4' : '#1e1b4b';
+    if(type === 'error') color = isDark ? '#ff5b5b' : '#991b1b';
+    if(type === 'success') color = isDark ? '#a3be8c' : '#065f46';
+    if(type === 'warn') color = isDark ? '#ebcb8b' : '#92400e';
     logDiv.innerHTML += `<div style="color: ${color}">>> ${msg}</div>`;
     
     setTimeout(() => {
@@ -237,29 +396,57 @@ function logmsg(msg, type='info') {
 
 let processor = null;
 
-// Conectar CMSIS-DAP
-connectBtn.onclick = async () => {
+// Unified Link Function (USB + Serial)
+const handleLink = async (requestPermissions = true) => {
+    if (processor) {
+        logmsg("Hardware already linked.", "info");
+        return;
+    }
+
     try {
-        logmsg("Requesting USB connection...", 'warn');
-        const device = await navigator.usb.requestDevice({
-            filters: [
-                { classCode: 255 }, // Generic Custom
-                { vendorId: 0x0D28 } // ARM DAP
-            ]
-        });
+        let device;
+        const devices = await navigator.usb.getDevices();
+        
+        if (devices.length > 0) {
+            device = devices[0]; // Auto-select the first known device
+            logmsg(`Auto-detected: ${device.productName || 'DAP-Link'}`, 'info');
+        } else if (requestPermissions) {
+            logmsg("Requesting USB permissions...", 'warn');
+            device = await navigator.usb.requestDevice({
+                filters: [
+                    { classCode: 255 },
+                    { vendorId: 0x0D28 }
+                ]
+            });
+        }
+
+        if (!device) return;
 
         const transport = new DAPjs.WebUSB(device);
         processor = new DAPjs.CortexM(transport, 0, 1000000); 
         
         await processor.connect();
-        logmsg(`Connected to USB Port: ${device.productName || 'CMSIS-DAP'}`, 'success');
+        logmsg(`Connected to USB Support`, 'success');
         
         flashBtn.disabled = false;
         disconnectBtn.classList.remove('hidden');
         flashBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+        // Sequence Serial initialization
+        setTimeout(async () => {
+            await handleSerialConnect(requestPermissions);
+        }, 300);
+
     } catch(err) {
-        logmsg("Connection error: " + err.message, 'error');
+        if (requestPermissions) {
+            logmsg("Connection error: " + err.message, 'error');
+        }
     }
+};
+
+connectBtn.onclick = (e) => {
+    if (e) e.stopPropagation();
+    handleLink(true);
 };
 
 disconnectBtn.onclick = async () => {
@@ -408,3 +595,220 @@ flashBtn.onclick = async () => {
         logmsg("Process failed: " + err.message, "error");
     }
 };
+
+// Documentation Logic
+const docsModal = document.getElementById('docsModal');
+const showDocsBtn = document.getElementById('showDocsBtn');
+const closeDocsBtn = document.getElementById('closeDocsBtn');
+const docContent = document.getElementById('docContent');
+
+showDocsBtn.onclick = () => {
+    docsModal.classList.remove('hidden');
+    loadDoc('PINOUT_APM32.md');
+};
+closeDocsBtn.onclick = () => docsModal.classList.add('hidden');
+
+async function loadDoc(file, el) {
+    // Handle tab styling
+    if (el) {
+        document.querySelectorAll('.doc-tab').forEach(tab => tab.classList.remove('active'));
+        el.classList.add('active');
+    }
+
+    try {
+        docContent.innerHTML = "<div class='text-center py-10 opacity-50 uppercase tracking-widest text-xs animate-pulse font-mono'>Decrypting Reference...</div>";
+        const res = await fetch(`docs/${file}`);
+        let md = await res.text();
+        
+        // Rewrite image paths to point to docs/img/ correctly
+        md = md.replace(/\.\/img\//g, 'docs/img/');
+        
+        docContent.innerHTML = `<article class='prose prose-invert'>${marked.parse(md)}</article>`;
+    } catch(err) {
+        docContent.innerHTML = "<div class='text-red-400 font-bold'>Error loading documentation. Please ensure the backend is running.</div>";
+    }
+}
+
+// Random ASCII Title Logic
+const fonts = [
+    'ansi_compact.txt', 'ansi_regular.txt', 'ansi_shadow.txt', 'big_money.txt', 
+    'big_money_ne.txt', 'big_money_nw.txt', 'big_money_se.txt', 'big_money_sw.txt', 
+    'diam_font.txt', 'dos.txt', 'emboss.txt', 'emboss2.txt', 'future.txt', 
+    'hex.txt', 'larry_3d.txt', 'lean.txt', 'morse.txt', 'old_banner.txt', 
+    'os2.txt', 'pagga.txt', 'pawp.txt', 'rowan.txt', 'rubiFont.txt', 
+    'shadow.txt', 'speed.txt', 'star_strips.txt', 'terrance.txt', 
+    'ticks.txt', 'ticks2.txt'
+];
+
+async function initTitle() {
+    const titleEl = document.getElementById('projectTitle');
+    if (!titleEl) return;
+    
+    try {
+        const randomFont = fonts[Math.floor(Math.random() * fonts.length)];
+        const res = await fetch(`fonts/${randomFont}`);
+        if (!res.ok) throw new Error();
+        const art = await res.text();
+        titleEl.textContent = art.trimRight();
+    } catch (err) {
+        titleEl.textContent = "APM32_STATION";
+        titleEl.classList.add('text-lg', 'lg:text-xl');
+    }
+}
+
+// Global Initialization
+window.addEventListener('DOMContentLoaded', () => {
+    initTitle();
+});
+
+// Web Serial Logic
+const terminalPane = document.getElementById('terminalPane');
+const toggleTerminalBtn = document.getElementById('toggleTerminalBtn');
+const openTerminalBtn = document.getElementById('openTerminalBtn');
+const serialOutput = document.getElementById('serialOutput');
+const serialConnectBtn = document.getElementById('serialConnectBtn');
+const baudRateSelect = document.getElementById('baudRate');
+const serialClearBtn = document.getElementById('serialClearBtn');
+const serialStatusLed = document.getElementById('serialStatusLed');
+const serialInputField = document.getElementById('serialInput');
+const serialSendBtn = document.getElementById('serialSendBtn');
+
+const toggleTerminal = () => {
+    const isClosed = terminalPane.classList.contains('h-8');
+    if (isClosed) {
+        terminalPane.classList.remove('h-8');
+        terminalPane.classList.add('h-48');
+        toggleTerminalBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+    } else {
+        terminalPane.classList.remove('h-48');
+        terminalPane.classList.add('h-8');
+        toggleTerminalBtn.querySelector('svg').style.transform = 'rotate(180deg)';
+    }
+};
+
+const terminalHeader = document.getElementById('terminalHeader');
+if (terminalHeader) terminalHeader.onclick = toggleTerminal;
+if (openTerminalBtn) openTerminalBtn.onclick = toggleTerminal;
+if (toggleTerminalBtn) toggleTerminalBtn.onclick = toggleTerminal;
+
+let serialPort = null;
+let serialReader = null;
+
+serialClearBtn.onclick = () => { serialOutput.innerHTML = ''; };
+
+const updateSerialLed = (connected) => {
+    if (connected) {
+        serialStatusLed.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)] transition-all duration-300';
+    } else {
+        serialStatusLed.className = 'w-2.5 h-2.5 rounded-full bg-slate-600 shadow-[0_0_5px_rgba(71,85,105,0.5)] transition-all duration-300';
+    }
+};
+
+const handleSerialDisconnect = async () => {
+    if (serialPort) {
+        if (serialReader) {
+            await serialReader.cancel();
+            serialReader = null;
+        }
+        await serialPort.close();
+        serialPort = null;
+        serialConnectBtn.innerText = 'Connect';
+        serialConnectBtn.classList.remove('text-red-400');
+        updateSerialLed(false);
+    }
+};
+
+const handleSerialConnect = async () => {
+    if (serialPort) {
+        await handleSerialDisconnect();
+        return;
+    }
+
+    try {
+        // Auto-detect if already authorized to avoid double-prompt if possible
+        const ports = await navigator.serial.getPorts();
+        if (ports.length > 0) {
+            serialPort = ports[0];
+            logmsg("Port auto-detected via saved permissions.", "success");
+        } else {
+            logmsg("Requesting Serial permissions (Browser Security)...", 'warn');
+            serialPort = await navigator.serial.requestPort();
+        }
+
+        const baudRate = parseInt(baudRateSelect.value);
+        await serialPort.open({ baudRate });
+        
+        serialConnectBtn.innerText = 'Disconnect';
+        serialConnectBtn.classList.add('text-red-400');
+        updateSerialLed(true);
+        
+        // Auto-show terminal
+        terminalPane.classList.remove('h-8');
+        terminalPane.classList.add('h-48');
+        toggleTerminalBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+
+        const decoder = new TextDecoderStream();
+        const inputDone = serialPort.readable.pipeTo(decoder.writable);
+        serialReader = decoder.readable.getReader();
+
+        while (true) {
+            const { value, done } = await serialReader.read();
+            if (done) break;
+            if (value) {
+                serialOutput.innerText += value;
+                serialOutput.scrollTop = serialOutput.scrollHeight;
+            }
+        }
+    } catch (err) {
+        logmsg("Serial Error: " + err.message, "error");
+        updateSerialLed(false);
+    }
+};
+
+serialConnectBtn.onclick = handleSerialConnect;
+
+const sendSerialData = async () => {
+    if (!serialPort || !serialPort.writable) {
+        logmsg("Serial not connected or not writable", "error");
+        return;
+    }
+    const text = serialInputField.value;
+    if (!text) return;
+
+    const encoder = new TextEncoder();
+    const writer = serialPort.writable.getWriter();
+    await writer.write(encoder.encode(text + '\n'));
+    writer.releaseLock();
+    serialInputField.value = '';
+};
+
+if (serialSendBtn) serialSendBtn.onclick = (e) => { e.stopPropagation(); sendSerialData(); };
+if (serialInputField) {
+    serialInputField.onclick = (e) => e.stopPropagation();
+    serialInputField.onkeydown = (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') sendSerialData();
+    };
+}
+
+// Removed redundant connectBtn override since it's consolidated above
+
+// Update disconnectBtn to also handle Serial
+const originalDisconnectBtnClick = disconnectBtn.onclick;
+disconnectBtn.onclick = async (e) => {
+    if (e) e.stopPropagation();
+    await originalDisconnectBtnClick();
+    await handleSerialDisconnect();
+};
+
+// Prevent header toggle when clicking controls
+[baudRateSelect, serialConnectBtn, serialClearBtn].forEach(el => {
+    if (el) el.addEventListener('click', (e) => e.stopPropagation());
+});
+
+// Auto-Link Trigger on Load
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        handleLink(false); // Try silent link (no prompts)
+    }, 1000);
+});
